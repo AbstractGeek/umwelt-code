@@ -1,16 +1,15 @@
 import marimo
 
-__generated_with = "0.19.2"
-app = marimo.App(
-    width="medium",
-    layout_file="layouts/kalman_filter.slides.json",
-)
+__generated_with = "0.19.4"
+app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
-    return (mo,)
+    import numpy as np
+    import matplotlib.pyplot as plt
+    return mo, np, plt
 
 
 @app.cell
@@ -59,7 +58,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     However, we do not have access to the hidden state directly. Instead, we have access to a noisy measurement \(z_t\) of the hidden state:
@@ -110,7 +109,7 @@ def _(mo):
     mo.md(r"""
     It seems like a lot needs to known about the system before using a Kalman filter. So, why use it then?
 
-    The advantage is that Kalman filter is a recursive approximator / filter / predictor. It runs in constant time and needs only the previous state to estimate the current state. This makes it suitable for real-time applications where data arrives sequentially.
+    **The advantage is that Kalman filter is a recursive approximator / filter / predictor.** It runs in constant time and needs only the previous state to estimate the current state. This makes it suitable for real-time applications where data arrives sequentially.
 
     It runs in two steps:
     1. **Prediction step**: Based on the previous state estimate and the system model, predict the current state and its uncertainty.
@@ -243,40 +242,48 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # process_cov_pos = mo.ui.slider(
-    #     steps=np.arange(0, 10.1, 0.1),
-    #     value=1.0,
-    #     label="Process noise variance (position):",
-    #     show_value=True,
-    # )
-    # process_cov_vel = mo.ui.slider(
-    #     steps=np.arange(0, 10.1, 0.1),
-    #     value=0.5,
-    #     label="Process noise variance (velocity):",
-    #     show_value=True,
-    # )
-    # measurement_cov_pos = mo.ui.slider(
-    #     steps=np.arange(0, 20.1, 0.1),
-    #     value=5.0,
-    #     label="Measurement noise variance (position):",
-    #     show_value=True,
-    # )
-    # measurement_cov_vel = mo.ui.slider(
-    #     steps=np.arange(0, 20.1, 0.1),
-    #     value=2.0,
-    #     label="Measurement noise variance (velocity):",
-    #     show_value=True,
-    # )
-    # process_cov_pos, process_cov_vel, measurement_cov_pos, measurement_cov_vel
-    return
+def _(mo, np):
+    process_cov_pos = mo.ui.slider(
+        steps=np.arange(1000, 100000, 1000),
+        value=5000.0,
+        label="Process noise variance (position):",
+        show_value=True,
+    )
+    process_cov_vel = mo.ui.slider(
+        steps=np.arange(0, 10.1, 0.1),
+        value=0.5,
+        label="Process noise variance (velocity):",
+        show_value=True,
+    )
+    measurement_cov_pos = mo.ui.slider(
+        steps=np.arange(10000, 100000, 10000),
+        value=50000.0,
+        label="Measurement noise variance (position):",
+        show_value=True,
+    )
+    measurement_cov_vel = mo.ui.slider(
+        steps=np.arange(0, 20.1, 0.1),
+        value=2.0,
+        label="Measurement noise variance (velocity):",
+        show_value=True,
+    )
+    process_cov_pos, process_cov_vel, measurement_cov_pos, measurement_cov_vel
+    return (
+        measurement_cov_pos,
+        measurement_cov_vel,
+        process_cov_pos,
+        process_cov_vel,
+    )
 
 
 @app.cell
-def _():
-    import numpy as np
-    import matplotlib.pyplot as plt
-
+def _(
+    measurement_cov_pos,
+    measurement_cov_vel,
+    np,
+    process_cov_pos,
+    process_cov_vel,
+):
     # Generate data
     rng = np.random.default_rng(42)
     num_steps = 100
@@ -295,11 +302,11 @@ def _():
     acceleration = np.concat(
         [
             np.zeros(10),
-            0.5 * np.ones(20),
+            2 * np.ones(20),
             np.ones(20),
             np.zeros(10),
             -np.ones(20),
-            -0.5 * np.ones(20),
+            -2 * np.ones(20),
         ]
     )
     # print(acceleration)
@@ -317,39 +324,47 @@ def _():
         true_states.append(x.flatten())
     true_states = np.array(true_states)
 
-    # Obtain noise variances from sliders
-    process_cov_pos = 1.0  # process noise variance for position
-    process_cov_vel = 0.5  # process noise variance for velocity
-    measurement_cov_pos = 5.0  # measurement noise variance for position
-    measurement_cov_vel = 2.0  # measurement noise variance for velocity
+    # # Obtain noise variances from sliders
+    # process_cov_pos = 1.0  # process noise variance for position
+    # process_cov_vel = 0.5  # process noise variance for velocity
+    # measurement_cov_pos = 5.0  # measurement noise variance for position
+    # measurement_cov_vel = 2.0  # measurement noise variance for velocity
 
     # Obtain noise
     process_noise = np.array(
         [
-            rng.normal(0, np.sqrt(process_cov_pos), size=num_steps),
-            rng.normal(0, np.sqrt(process_cov_vel), size=num_steps),
+            rng.normal(0, np.sqrt(process_cov_pos.value), size=num_steps),
+            rng.normal(0, np.sqrt(process_cov_vel.value), size=num_steps),
         ]
     ).transpose()
 
     measurement_noise = np.array(
         [
-            rng.normal(0, np.sqrt(measurement_cov_pos), size=num_steps),
-            rng.normal(0, np.sqrt(measurement_cov_vel), size=num_steps),
+            rng.normal(0, np.sqrt(measurement_cov_pos.value), size=num_steps),
+            rng.normal(0, np.sqrt(measurement_cov_vel.value), size=num_steps),
         ]
     ).transpose()
 
     # Noisy states
-    noisy_states = []
-    x = x0
-    for i, a in enumerate(acceleration):
-        x = F @ x + B * a + process_noise[i].reshape(-1, 1)
-        noisy_states.append(x.flatten())
-    noisy_states = np.array(noisy_states)
+    noisy_states = true_states + np.cumsum(process_noise, axis=0)
 
     # Measurements
     measurements = noisy_states + measurement_noise
+    return (
+        B,
+        F,
+        P0,
+        acceleration,
+        measurements,
+        noisy_states,
+        num_steps,
+        true_states,
+        x0,
+    )
 
 
+@app.cell
+def _(acceleration, measurements, noisy_states, plt, true_states):
     # Plot data
     plt.figure(figsize=(14, 10))
 
@@ -395,7 +410,7 @@ def _():
 
     # Plot Acceleration
     plt.subplot(3, 1, 3)
-    plt.plot(acceleration, label="accelaration", color="b", linestyle=":")
+    plt.plot(acceleration, label="acceleration", color="b", linestyle=":")
     plt.title("Acceleration")
     plt.xlabel("Time Steps")
     plt.ylabel("Acceleration")
@@ -403,23 +418,7 @@ def _():
 
     plt.tight_layout()
     plt.gca()
-    return (
-        B,
-        F,
-        P0,
-        acceleration,
-        measurement_cov_pos,
-        measurement_cov_vel,
-        measurements,
-        noisy_states,
-        np,
-        num_steps,
-        plt,
-        process_cov_pos,
-        process_cov_vel,
-        true_states,
-        x0,
-    )
+    return
 
 
 @app.cell
@@ -455,30 +454,116 @@ def _(np):
 
 @app.cell
 def _(
+    measurement_cov_pos,
+    measurement_cov_vel,
+    mo,
+    process_cov_pos,
+    process_cov_vel,
+):
+    use_data_cov = mo.ui.checkbox(
+        label="Use data noise variances as guesses for Kalman filter?",
+        value=False,
+    )
+
+    g_process_cov_pos = mo.ui.slider(
+        steps=process_cov_pos.steps,
+        value=2000.0,
+        label="Guess of process noise variance (position):",
+        show_value=True,
+    )
+    g_process_cov_vel = mo.ui.slider(
+        steps=process_cov_vel.steps,
+        value=1.0,
+        label="Guess of process noise variance (velocity):",
+        show_value=True,
+    )
+    g_measurement_cov_pos = mo.ui.slider(
+        steps=measurement_cov_pos.steps,
+        value=70000.0,
+        label="Guess of measurement noise variance (position):",
+        show_value=True,
+    )
+    g_measurement_cov_vel = mo.ui.slider(
+        steps=measurement_cov_vel.steps,
+        value=4.0,
+        label="Guess of measurement noise variance (velocity):",
+        show_value=True,
+    )
+
+    (
+        use_data_cov,
+        g_process_cov_pos,
+        g_process_cov_vel,
+        g_measurement_cov_pos,
+        g_measurement_cov_vel,
+    )
+    return (
+        g_measurement_cov_pos,
+        g_measurement_cov_vel,
+        g_process_cov_pos,
+        g_process_cov_vel,
+        use_data_cov,
+    )
+
+
+@app.cell
+def _(
     B,
     F,
     KalmanFilter,
     P0,
-    acceleration,
+    g_measurement_cov_pos,
+    g_measurement_cov_vel,
+    g_process_cov_pos,
+    g_process_cov_vel,
     measurement_cov_pos,
     measurement_cov_vel,
-    measurements,
     np,
-    num_steps,
     process_cov_pos,
     process_cov_vel,
+    use_data_cov,
     x0,
 ):
-    train_kalman_filter = KalmanFilter(
-        F=F,
-        B=B,
-        H=np.eye(2),
-        Q=np.array([[process_cov_pos, 0], [0, process_cov_vel]]),
-        R=np.array([[measurement_cov_pos, 0], [0, measurement_cov_vel]]),
-        x0=x0,
-        P0=P0,
-    )
+    if use_data_cov.value:
+        train_kalman_filter = KalmanFilter(
+            F=F,
+            B=B,
+            # H=np.array([[1, 0], [0, 0]]),
+            H=np.eye(2),
+            Q=np.array([[process_cov_pos.value, 0], [0, process_cov_vel.value]]),
+            R=np.array(
+                [
+                    [measurement_cov_pos.value, 0],
+                    [0, measurement_cov_vel.value],
+                ]
+            ),
+            x0=x0,
+            P0=P0,
+        )
 
+    else:
+        train_kalman_filter = KalmanFilter(
+            F=F,
+            B=B,
+            # H=np.array([[1, 0], [0, 0]]),
+            H=np.eye(2),
+            Q=np.array(
+                [[g_process_cov_pos.value, 0], [0, g_process_cov_vel.value]]
+            ),
+            R=np.array(
+                [
+                    [g_measurement_cov_pos.value, 0],
+                    [0, g_measurement_cov_vel.value],
+                ]
+            ),
+            x0=x0,
+            P0=P0,
+        )
+    return (train_kalman_filter,)
+
+
+@app.cell
+def _(acceleration, measurements, np, num_steps, train_kalman_filter):
     estimated_states = []
     for j in range(num_steps):
         u = np.array([[acceleration[j]]])  # control input (acceleration)
