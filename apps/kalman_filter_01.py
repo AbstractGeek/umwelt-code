@@ -129,7 +129,7 @@ def _(mo):
     mo.md(r"""
     ## Train position estimation example
 
-    <img src="public/kalman_filter_01.png"/>
+    <img src="public/kalman_filter_01_01.png" width="800" />
 
     The hidden state of the train, its position and velocity, needs to be known by the train operator.
 
@@ -140,7 +140,7 @@ def _(mo):
 
     Based on the two noisy measurements, the position and velocity of the train needs to be estimated.
 
-    Image from: https://courses.physics.illinois.edu/ece420/sp2019/7_UnderstandingKalmanFilter.pdf
+    Example, image inspired from: https://courses.physics.illinois.edu/ece420/sp2019/7_UnderstandingKalmanFilter.pdf
     """)
     return
 
@@ -150,15 +150,9 @@ def _(mo):
     mo.md(rf"""
     ### Train position estimation steps
 
-    <img src="public/kalman_filter_02.png"/>
+    <img src="public/kalman_filter_01_02.png" width="800" />
 
-    <img src="public/kalman_filter_03.png"/>
-
-    <img src="public/kalman_filter_04.png"/>
-
-    <img src="public/kalman_filter_05.png"/>
-
-    Images from: https://courses.physics.illinois.edu/ece420/sp2019/7_UnderstandingKalmanFilter.pdf
+    Images inspired from: https://courses.physics.illinois.edu/ece420/sp2019/7_UnderstandingKalmanFilter.pdf
     """)
     return
 
@@ -168,7 +162,7 @@ def _(mo):
     mo.md(r"""
     ## State estimation steps
 
-    ![alt](public/kalman_filter_06.png)
+    ![alt](public/kalman_filter_01_03.png)
 
     Image from: https://arxiv.org/pdf/1710.04055 (Fig. 4)
     """)
@@ -180,7 +174,7 @@ def _(mo):
     mo.md(r"""
     ### Pictorial representation
 
-    ![alt](public/kalman_filter_07.png)
+    ![alt](public/kalman_filter_01_04.png)
 
     Image from: https://arxiv.org/pdf/1710.04055 (Fig. 5)
     """)
@@ -242,6 +236,14 @@ def _(mo):
 
 
 @app.cell
+def _(mo):
+    mo.md(r"""
+    ### Generate dataset
+    """)
+    return
+
+
+@app.cell
 def _(mo, np):
     process_cov_pos = mo.ui.slider(
         steps=np.arange(1000, 100000, 1000),
@@ -267,13 +269,30 @@ def _(mo, np):
         label="Measurement noise variance (velocity):",
         show_value=True,
     )
-    process_cov_pos, process_cov_vel, measurement_cov_pos, measurement_cov_vel
     return (
         measurement_cov_pos,
         measurement_cov_vel,
         process_cov_pos,
         process_cov_vel,
     )
+
+
+@app.cell
+def _(
+    measurement_cov_pos,
+    measurement_cov_vel,
+    mo,
+    process_cov_pos,
+    process_cov_vel,
+):
+    mo.md(rf"""
+    #### Noise variances
+    - {process_cov_pos}
+    - {process_cov_vel}
+    - {measurement_cov_pos}
+    - {measurement_cov_vel}
+    """)
+    return
 
 
 @app.cell
@@ -364,6 +383,14 @@ def _(
 
 
 @app.cell
+def _(mo):
+    mo.md(r"""
+    #### Plot generated data
+    """)
+    return
+
+
+@app.cell
 def _(acceleration, measurements, noisy_states, plt, true_states):
     # Plot data
     plt.figure(figsize=(14, 10))
@@ -422,6 +449,14 @@ def _(acceleration, measurements, noisy_states, plt, true_states):
 
 
 @app.cell
+def _(mo):
+    mo.md(r"""
+    ### Run Kalman filter on generated data
+    """)
+    return
+
+
+@app.cell
 def _(np):
     class KalmanFilter:
         def __init__(self, F, B, H, Q, R, x0, P0):
@@ -453,6 +488,14 @@ def _(np):
 
 
 @app.cell
+def _(mo):
+    mo.md(r"""
+    #### Guess noise covariance
+    """)
+    return
+
+
+@app.cell
 def _(
     measurement_cov_pos,
     measurement_cov_vel,
@@ -461,8 +504,8 @@ def _(
     process_cov_vel,
 ):
     use_data_cov = mo.ui.checkbox(
-        label="Use data noise variances as guesses for Kalman filter?",
-        value=False,
+        label="Use data as guesses for Kalman filter?",
+        value=True,
     )
 
     g_process_cov_pos = mo.ui.slider(
@@ -489,14 +532,6 @@ def _(
         label="Guess of measurement noise variance (velocity):",
         show_value=True,
     )
-
-    (
-        use_data_cov,
-        g_process_cov_pos,
-        g_process_cov_vel,
-        g_measurement_cov_pos,
-        g_measurement_cov_vel,
-    )
     return (
         g_measurement_cov_pos,
         g_measurement_cov_vel,
@@ -504,6 +539,27 @@ def _(
         g_process_cov_vel,
         use_data_cov,
     )
+
+
+@app.cell
+def _(
+    g_measurement_cov_pos,
+    g_measurement_cov_vel,
+    g_process_cov_pos,
+    g_process_cov_vel,
+    mo,
+    use_data_cov,
+):
+    mo.md(rf"""
+    {use_data_cov}
+
+    Covariance guesses:
+    - {g_process_cov_pos}
+    - {g_process_cov_vel}
+    - {g_measurement_cov_pos}
+    - {g_measurement_cov_vel}
+    """)
+    return
 
 
 @app.cell
@@ -524,6 +580,7 @@ def _(
     use_data_cov,
     x0,
 ):
+    # Obtain covariance guesses
     if use_data_cov.value:
         train_kalman_filter = KalmanFilter(
             F=F,
@@ -564,6 +621,7 @@ def _(
 
 @app.cell
 def _(acceleration, measurements, np, num_steps, train_kalman_filter):
+    # Estimate states
     estimated_states = []
     for j in range(num_steps):
         u = np.array([[acceleration[j]]])  # control input (acceleration)
@@ -575,6 +633,14 @@ def _(acceleration, measurements, np, num_steps, train_kalman_filter):
         estimated_states.append(train_kalman_filter.x.flatten())
     estimated_states = np.array(estimated_states)
     return (estimated_states,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    #### Plot estimation states
+    """)
+    return
 
 
 @app.cell
