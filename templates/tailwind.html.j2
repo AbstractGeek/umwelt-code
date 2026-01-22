@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>marimo WebAssembly + GitHub Pages Template</title>
+  <title> DN's Apps and Notebooks </title>
   <!-- Include Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -12,11 +12,27 @@
     <!-- Header -->
     <header class="bg-gray-100 p-6 text-center rounded-lg mb-6">
       <img src="https://raw.githubusercontent.com/marimo-team/marimo/main/docs/_static/marimo-logotype-thick.svg" alt="marimo Logo" class="w-20 h-auto mx-auto mb-3">
-      <h1 class="text-2xl font-bold mb-2">marimo WebAssembly + GitHub Pages Template</h1>
-      <p class="text-sm">Interactive Python notebooks exported to WebAssembly and deployed to GitHub Pages</p>
+      <h2 class="text-2xl font-bold mb-2">DN's Apps and Notebooks</h2>
+      <p class="text-sm">Interactive Python apps and notebooks that are linked to notes in my <a href="https://umwelt.dineshnatesan.com/" target="_blank" class="text-blue-500 hover:underline">digital garden</a></p>
     </header>
 
     <main>
+      {% if apps %}
+      <h2 class="text-xl font-bold text-center my-4">Apps</h2>
+      <p class="text-center mb-4">Interactive applications in run mode - code is hidden for a clean user interface</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for app in apps %}
+        <!-- {{ app.display_name }} App -->
+        <div class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+          <div class="bg-gray-100 p-3 font-semibold">{{ app.display_name }}</div>
+          <div class="p-4">
+            <a href="{{ app.html_path }}" class="inline-block bg-amber-500 hover:bg-amber-600 text-white py-1 px-3 rounded transition-colors">Open App</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
       {% if notebooks %}
       <h2 class="text-xl font-bold text-center my-4">Notebooks</h2>
       <p class="text-center mb-4">Interactive notebooks in edit mode - you can modify and experiment with the code</p>
@@ -33,25 +49,13 @@
       </div>
       {% endif %}
 
-      {% if apps %}
-      <h2 class="text-xl font-bold text-center my-4">Apps</h2>
-      <p class="text-center mb-4">Interactive applications in run mode - code is hidden for a clean user interface</p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for app in apps %}
-        <!-- {{ app.display_name }} App -->
-        <div class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-          <div class="bg-gray-100 p-3 font-semibold">{{ app.display_name }}</div>
-          <div class="p-4">
-            <a href="{{ app.html_path }}" class="inline-block bg-amber-500 hover:bg-amber-600 text-white py-1 px-3 rounded transition-colors">Open App</a>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
     </main>
 
     <footer class="mt-10 pt-6 border-t border-gray-200 text-center text-sm text-gray-600">
-      <p class="mb-2">Built with <a href="https://marimo.io" target="_blank" class="text-blue-500 hover:underline">marimo</a> - Interactive Python notebooks</p>
+      <p> Built with <a href="https://marimo.io" target="_blank" class="text-blue-500 hover:underline">marimo</a> | © 2026 Dinesh Natesan | 
+        <a href="https://dineshnatesan.com/" target="_blank" class="text-blue-500 hover:underline">Website</a> | 
+        <a href="https://github.com/AbstractGeek/umwelt-code" target="_blank" class="text-blue-500 hover:underline">GitHub</a>
+      </p>
     </footer>
   </div>
 </body>

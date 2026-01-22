@@ -31,7 +31,7 @@ def _(mo):
 
     Paper reference: https://www.sciencedirect.com/science/article/pii/S2211124718315766
 
-    Here, the larvae's location was continuous estimated (and updated) using a Kalman filter. This location was used to image the larvae's brain (image below from paper). My aim is to apply a similar approach to estimate the fly location in real-time.
+    Here, the larvae's location was continuously estimated (and updated) using a Kalman filter. This location was used to image the larvae's brain (image below from paper). My aim is to apply a similar approach to estimate the fly location in real-time.
 
     <img src="https://ars.els-cdn.com/content/image/1-s2.0-S2211124718315766-fx1.jpg" width="800" />
     """)
@@ -107,7 +107,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    It seems like a lot needs to known about the system before using a Kalman filter. So, why use it then?
+    It seems like a lot needs to be known about the system before using a Kalman filter. So, why use it then?
 
     **The advantage is that Kalman filter is a recursive approximator / filter / predictor.** It runs in constant time and needs only the previous state to estimate the current state. This makes it suitable for real-time applications where data arrives sequentially.
 
@@ -184,7 +184,7 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## Implementation the train example
+    ## Implementing the train example
 
     Hidden states:
 

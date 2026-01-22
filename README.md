@@ -1,3 +1,14 @@
+# Umwelt code
+
+This repository uses the [marimo gh pages template](https://github.com/marimo-team/marimo-gh-pages-template) to serve code and apps that I developed.. Descriptions for the code can generally be found in [my digital garden](https://umwelt.dineshnatesan.com/) and the apps/notebooks can be [viewed here](https://nb.dineshnatesan.com/).
+
+---
+
+## Marimo gh pages repo readme
+
+<details>
+  <summary>Click me</summary>
+
 # marimo WebAssembly + GitHub Pages Template
 
 This template repository demonstrates how to export [marimo](https://marimo.io) notebooks to WebAssembly and deploy them to GitHub Pages.
