@@ -1,6 +1,13 @@
+"""Rethinking Application Feedback
+
+A marimo app that simulates a multi-stage hiring process and provides different
+approaches to communicating feedback to applicants. Visualizes how applicants
+rank against the distribution of scores at each stage.
+"""
+
 import marimo
 
-__generated_with = "0.19.4"
+__generated_with = "0.20.2"
 app = marimo.App(width="medium")
 
 
@@ -11,17 +18,18 @@ def _():
     import matplotlib.pyplot as plt
     import scipy.stats as stats
     import pandas as pd
+
     return mo, np, pd, plt, stats
 
 
 @app.cell
 def _(mo):
-    # Define constants for the simulation
+    """Configure simulation parameters and applicant selection."""
 
-    ## User inputs
+    # Simulation controls
     applications = mo.ui.number(
         start=10, stop=10000, step=10, value=1000, label="Applications received: "
-    )  # number of applications to simulate
+    )
     first_stage = mo.ui.number(
         start=1,
         stop=100,
@@ -41,34 +49,23 @@ def _(mo):
     )  # number of positions to hire (i.e. top N candidates from final stage)
 
     # random_seed = mo.ui.number(start=10, stop=10000, step=10, value=1000)
-
-    ## Select applicant
-    selected_applicant = mo.ui.number(
-        start=1,
-        stop=applications.stop,
-        step=1,
-        value=50,
-        label="Select an application number: ",
-    )
-    return (
-        applications,
-        first_stage,
-        hiring_positions,
-        second_stage,
-        selected_applicant,
-    )
+    return applications, first_stage, hiring_positions, second_stage
 
 
 @app.cell
 def _(applications, first_stage, hiring_positions, np, pd, second_stage):
-    # Generate applications
-    # Note: Different stages use different sampling distributions to show the usefulness of distribution based feedback to applicants.
+    """Generate simulated applicant data across three interview stages.
 
-    ## Set rng seed for reproducibility
+    Each stage uses different statistical distributions to represent realistic
+    patterns and to demonstrate how distribution-based feedback helps candidates
+    understand their performance relative to the applicant pool.
+    """
+
+    # Initialize random number generator for reproducibility
     rng = np.random.default_rng(seed=2 * 42)
 
-    ## Stage 1: Application and Resume Scores
-    # Application and resume score are lognormally distributed (long tail to the right; mimicking lot of applicants but fewer good ones)
+    # STAGE 1: Application + Resume Review
+    # Uses lognormal distribution (long right tail) to model many applicants with fewer strong candidates
     names = [f"Applicant {i + 1}" for i in range(applications.value)]
     application_scores = np.round(
         np.clip(
@@ -86,9 +83,9 @@ def _(applications, first_stage, hiring_positions, np, pd, second_stage):
     stage_1_cutoff = np.percentile(stage_1_scores, 100 - first_stage.value)
     passed_stage_1 = stage_1_scores >= stage_1_cutoff
 
-    ## Stage 2: Work Test and Interview Scores
-    # Work test scores is t-distributed (gaussian-like, but with heavy tails)
-    # Interview scores are lognormally distributed but with long tail on the left (i.e. all candidates are generally good at interviewing)
+    # STAGE 2: Work Test + First Interview
+    # Work test: t-distribution (like normal but with heavier tails)
+    # Interview: inverted lognormal (subtracting from 10 creates left-skew distribution)
     worktest_scores = np.round(
         np.clip(
             5 + 5 * (rng.standard_t(df=2, size=applications.value) / 10), 0, 10
@@ -112,8 +109,8 @@ def _(applications, first_stage, hiring_positions, np, pd, second_stage):
     passed_stage_2 = stage_2_scores >= stage_2_cutoff
 
 
-    ## Stage 3: Final Interview
-    # Final interview scores are normally distributed (i.e. all are generally good)
+    # STAGE 3: Final Interview
+    # Normal distribution (candidates who reach here are generally strong)
     final_interview_scores = (
         np.clip(
             np.round(rng.normal(loc=10, scale=3, size=applications.value)), 0, 20
@@ -121,42 +118,46 @@ def _(applications, first_stage, hiring_positions, np, pd, second_stage):
         / 2
     )
     final_interview_scores[~passed_stage_2] = 0
-    sorted_final_scores_ind = final_interview_scores.argsort()
-    selected_ind = sorted_final_scores_ind[
-        ~np.isnan(final_interview_scores[sorted_final_scores_ind])
-    ][::-1][: hiring_positions.value]
+
+    # Select top candidates for hiring positions
     selected = np.full_like(final_interview_scores, False, dtype=bool)
     selected[final_interview_scores.argsort()[::-1][: hiring_positions.value]] = (
         True
     )
 
+    # Calculate total score (sum of all stages)
     total_scores = stage_1_scores + stage_2_scores + final_interview_scores
 
+    # Create DataFrame with all candidate data
     applications_df = pd.DataFrame(
         {
             "Name": names,
             "Application Score": application_scores,
             "Resume Score": resume_scores,
             "First Stage Score": stage_1_scores,
-            "Passed First Stage": passed_stage_1,
+            "Selected First Stage": passed_stage_1,
             "Work Test Score": worktest_scores,
             "First Interview Score": first_interview_scores,
             "Second Stage Score": stage_2_scores,
-            "Passed Second Stage": passed_stage_2,
+            "Selected Second Stage": passed_stage_2,
             "Final Interview Score": final_interview_scores,
             "Total Score": total_scores,
             "Normalized Score": np.round(total_scores / np.max(total_scores), 4),
-            "Selected": selected,
+            "Hired": selected,
         }
     )
-    # applications_df
     return applications_df, names
 
 
 @app.cell
-def _(applications_df, names, np, pd):
-    # Generate sorted and normalized scores
+def _(applications, applications_df, mo, names, np, pd):
+    """Create sorted view and normalize scores for visualization.
 
+    Generates rankings and percentiles for each scoring stage to enable
+    comparative feedback and ranking displays.
+    """
+
+    # Create sorted view for database display
     sorted_df = applications_df.sort_values(
         [
             "Total Score",
@@ -167,6 +168,7 @@ def _(applications_df, names, np, pd):
         ascending=False,
     ).reset_index(drop=True)
 
+    # Create normalized scores, percentiles, and rankings for each stage
     normalized_df = pd.DataFrame(
         {
             "Name": names,
@@ -181,7 +183,7 @@ def _(applications_df, names, np, pd):
             "First Stage Position": applications_df["First Stage Score"]
             .rank(ascending=False)
             .astype(int),
-            "Passed First Stage": applications_df["Passed First Stage"],
+            "Selected First Stage": applications_df["Selected First Stage"],
             "Second Stage Score": np.round(
                 applications_df["Second Stage Score"]
                 / applications_df["Second Stage Score"].max(),
@@ -193,7 +195,7 @@ def _(applications_df, names, np, pd):
             "Second Stage Position": applications_df["Second Stage Score"]
             .rank(ascending=False)
             .astype(int),
-            "Passed Second Stage": applications_df["Passed Second Stage"],
+            "Selected Second Stage": applications_df["Selected Second Stage"],
             "Final Interview Score": np.round(
                 applications_df["Final Interview Score"]
                 / applications_df["Final Interview Score"].max(),
@@ -205,7 +207,7 @@ def _(applications_df, names, np, pd):
             "Final Interview Position": applications_df["Final Interview Score"]
             .rank(ascending=False)
             .astype(int),
-            "Selected": applications_df["Selected"],
+            "Hired": applications_df["Hired"],
             "Total Score": np.round(
                 applications_df["Total Score"]
                 / applications_df["Total Score"].max(),
@@ -219,66 +221,31 @@ def _(applications_df, names, np, pd):
             .astype(int),
         }
     )
-    # normalized_df
-    return normalized_df, sorted_df
 
-
-@app.cell
-def _(normalized_df):
-    normalized_df.sort_values("Total Position").head(20)
-    return
+    ## Select applicant
+    selected_applicant = mo.ui.slider(
+        start=1,
+        stop=applications.value,
+        step=1,
+        value=50,
+        include_input=True,
+        label="Select an application number: ",
+    )
+    return normalized_df, selected_applicant, sorted_df
 
 
 @app.cell
 def _(applications_df, normalized_df, selected_applicant):
+    """Extract data for the selected applicant from raw and normalized views."""
+
     sel_app = applications_df.loc[selected_applicant.value - 1]
     n_app = normalized_df.loc[selected_applicant.value - 1]
     return n_app, sel_app
 
 
 @app.cell
-def _():
-    # # Calculate selected applicant's percentile and position for all approaches
-    # curr_app = applications_df.loc[selected_applicant.value - 1]
-
-    # ## Approach 1, 2
-    # total_percentile = np.round(
-    #     stats.percentileofscore(
-    #         applications_df["Total Score"], curr_app["Total Score"]
-    #     ),
-    #     1,
-    # )
-
-    # total_position = sorted_df.index[
-    #     sorted_df["Name"] == f"Applicant {selected_applicant.value}"
-    # ].values[0]
-
-    # ## Approach 3
-    # first_stage_percentile = np.round(
-    #     stats.percentileofscore(
-    #         applications_df["First Stage Score"], curr_app["First Stage Score"]
-    #     ),
-    #     1,
-    # )
-    # second_stage_percentile = np.round(
-    #     stats.percentileofscore(
-    #         applications_df["Second Stage Score"], curr_app["Second Stage Score"]
-    #     ),
-    #     1,
-    # )
-    # final_interview_percentile = np.round(
-    #     stats.percentileofscore(
-    #         applications_df["Final Interview Score"],
-    #         curr_app["Final Interview Score"],
-    #     ),
-    #     1,
-    # )
-    return
-
-
-@app.cell
 def _(applications, hiring_positions, mo, n_app):
-    # Approach 1: Simple Statistics
+    """Display Approach 1: Simple ranking and percentile statistics."""
 
     approach_1_header = mo.md(rf"""
     ## Approach 1: Simple Statistics
@@ -293,9 +260,8 @@ def _(applications, hiring_positions, mo, n_app):
                 rf"Applicant's rank: **{n_app['Total Position'] + 1}** (top {hiring_positions.value} are selected)"
             ),
             mo.md(
-                rf"Applicant's percentile: **{n_app['Total Percentile']}**th percentile"
+                rf"Applicant's percentile: **{n_app['Total Percentile']:.2%}**th percentile"
             ),
-            mo.md("-"),
         ],
         gap=0,
     )
@@ -304,20 +270,25 @@ def _(applications, hiring_positions, mo, n_app):
 
 @app.cell
 def _(applications_df, mo, np, plt, sel_app, stats):
-    # Approach 2: Visual statistics
+    """Display Approach 2: Distribution visualization with histogram and KDE.
 
-    ## Colors
-    hist_color = "#8ecae6"
-    hist_edge = "#023047"
-    kde_color = "#1f77b4"
-    marker_color = "#f93200"
-    selected_color = "#06d6a0"
+    Shows the distribution of total scores across all applicants, with markers
+    for the selected applicant and hired candidates.
+    """
 
-    ## Plot
-    _fig, _ax = plt.subplots(figsize=(10, 6))
-    _x = applications_df["Total Score"].values
+    # Color scheme for visualizations
+    hist_color = "#8ecae6"  # Light blue for histogram
+    hist_edge = "#023047"  # Dark blue for edges
+    kde_color = "#1f77b4"  # Blue for KDE curve
+    marker_color = "#f93200"  # Red for selected applicant
+    selected_color = "#06d6a0"  # Green for hired candidates
+
+    # Create figure with histogram and KDE
+    _fig, _ax = plt.subplots(figsize=(8, 4))
+    _scores = applications_df["Total Score"].values
+    # Plot histogram of score distribution
     _ax.hist(
-        _x,
+        _scores,
         bins=30,
         color=hist_color,
         edgecolor=hist_edge,
@@ -325,11 +296,15 @@ def _(applications_df, mo, np, plt, sel_app, stats):
         alpha=0.45,
         density=False,
     )
-    _kde = stats.gaussian_kde(_x)
-    _x_grid = np.linspace(_x.min(), _x.max(), 200)
+
+    # Add KDE curve on secondary y-axis for density
+    _kde = stats.gaussian_kde(_scores)
+    _x_grid = np.linspace(_scores.min(), _scores.max(), 200)
     _ax2 = _ax.twinx()
     _ax2.plot(_x_grid, _kde(_x_grid), color=kde_color, linewidth=2.2)
     _ax2.fill_between(_x_grid, _kde(_x_grid), color=kde_color, alpha=0.15)
+
+    # Mark selected applicant
     _ax.axvline(
         sel_app["Total Score"],
         color=marker_color,
@@ -337,17 +312,20 @@ def _(applications_df, mo, np, plt, sel_app, stats):
         linewidth=2,
         label="Applicant",
     )
-    for _sel_i, _sel_score in enumerate(
-        applications_df.loc[applications_df["Selected"]]["Total Score"]
+
+    # Mark hired candidates with vertical line segments
+    for idx, _score in enumerate(
+        applications_df.loc[applications_df["Hired"]]["Total Score"]
     ):
         _ax.plot(
-            [_sel_score, _sel_score],
-            [0, _ax.get_ylim()[1] * 0.25],  # Line goes from 0 to 80% of max height
+            [_score, _score],
+            [0, _ax.get_ylim()[1] * 0.25],
             color=selected_color,
             linestyle="--",
             linewidth=2,
-            label=f"Selected {_sel_i + 1}",
+            label=f"Hired {idx + 1}",
         )
+
     _ax.set_xlabel("Total Score")
     _ax.set_ylabel("Frequency")
     _ax2.set_ylabel("Density")
@@ -359,7 +337,7 @@ def _(applications_df, mo, np, plt, sel_app, stats):
     plt.tight_layout()
     plt.show()
 
-    ## Markdown
+    # Create markdown header and figure embed
     approach_2_header = mo.md(rf"""
     ## Approach 2: Visual Statistics
     """)
@@ -379,32 +357,101 @@ def _(applications_df, mo, np, plt, sel_app, stats):
 
 
 @app.cell
-def _(applications, hiring_positions, mo, sel_app):
-    ## Approach 3: Descriptive Statistics
+def _(mo, n_app, sel_app):
+    """Display Approach 3 summary text (distributions shown below)."""
 
     approach_3_header = mo.md(rf"""
     ## Approach 3: Descriptive Statistics
     """)
 
-    approach_3_text = mo.vstack(
-        [
-            mo.md(rf"Total applications: {applications.value}"),
-            mo.md(rf"Positions available: {hiring_positions.value}"),
-            mo.md("-"),
-            mo.md("Stage 1: Application + Resume Scores"),
-            mo.md(
-                "Applicant status: "
-                + ("Selected" if sel_app["Passed First Stage"] else "Not selected")
-            ),
-            mo.md("Applicant rank: "),
-            mo.md("-"),
-            mo.md("Stage 2: First interview + Work Test Scores"),
-            mo.md("-"),
-        ],
-        gap=0,
-    )
-    approach_3_text
-    return
+    approach_3_text = [
+        mo.vstack(
+            [
+                # mo.md(rf"Total applications: {applications.value}"),
+                # mo.md(rf"Positions available: {hiring_positions.value}"),
+                # mo.md("-"),
+                mo.md("### Stage 1: Application + Resume Scores"),
+                mo.md(
+                    "Applicant status: "
+                    + (
+                        "Selected"
+                        if sel_app["Selected First Stage"]
+                        else "Not selected"
+                    )
+                ),
+                mo.md(rf"Applicant's rank: {n_app['First Stage Position']}"),
+                mo.md(
+                    rf"Applicant's percentile: {n_app['First Stage Percentile']:.2%}"
+                ),
+            ],
+            gap=0,
+        ),
+        mo.vstack(
+            [
+                mo.md("### Stage 2: First interview + Work Test Scores"),
+                mo.md(
+                    "Applicant status: "
+                    + (
+                        "Selected"
+                        if sel_app["Selected Second Stage"]
+                        else "Not selected"
+                        if sel_app["Selected First Stage"]
+                        else "N/A"
+                    )
+                ),
+                mo.md(
+                    "Applicant's rank: "
+                    + (
+                        f"{n_app['Second Stage Position']}"
+                        if sel_app["Selected First Stage"]
+                        else "N/A"
+                    )
+                ),
+                mo.md(
+                    "Applicant's percentile: "
+                    + (
+                        f"{n_app['Second Stage Percentile']:.2%}"
+                        if sel_app["Selected First Stage"]
+                        else "N/A"
+                    )
+                ),
+            ],
+            gap=0,
+        ),
+        mo.vstack(
+            [
+                mo.md("### Stage 3: Final Interview Scores"),
+                mo.md(
+                    "Applicant status: "
+                    + (
+                        "Hired"
+                        if sel_app["Hired"]
+                        else "Not hired"
+                        if sel_app["Selected Second Stage"]
+                        else "N/A"
+                    )
+                ),
+                mo.md(
+                    "Applicant's rank: "
+                    + (
+                        f"{n_app['Final Interview Position']}"
+                        if sel_app["Selected Second Stage"]
+                        else "N/A"
+                    )
+                ),
+                mo.md(
+                    "Applicant's percentile: "
+                    + (
+                        f"{n_app['Final Interview Percentile']:.2%}"
+                        if sel_app["Selected Second Stage"]
+                        else "N/A"
+                    )
+                ),
+            ],
+            gap=0,
+        ),
+    ]
+    return approach_3_header, approach_3_text
 
 
 @app.cell
@@ -413,6 +460,7 @@ def _(
     hist_edge,
     kde_color,
     marker_color,
+    mo,
     n_app,
     normalized_df,
     np,
@@ -420,41 +468,44 @@ def _(
     selected_color,
     stats,
 ):
-    ## Approach 3: Descriptive Statistics
+    """Display Approach 3: Three-panel visualization of scores at each stage.
 
-    _fig, _axes = plt.subplots(1, 3, figsize=(15, 4), sharey=False)
-    # hist_color = "#8ecae6"
-    # hist_edge = "#023047"
-    # kde_color = "#1f77b4"
+    Shows normalized score distributions for each interview stage, comparing
+    selected vs. non-selected candidates, with KDE curves and selected applicant marker.
+    """
 
-    # Plot histograms and KDEs for each stage score
-    for _ax, col, pass_col, title in [
-        (
-            _axes[0],
-            "First Stage Score",
-            "Passed First Stage",
-            "Application + Resume",
-        ),
-        (
-            _axes[1],
-            "Second Stage Score",
-            "Passed Second Stage",
-            "First interview + Work Test",
-        ),
-        (_axes[2], "Final Interview Score", "Selected", "Final Interview"),
-    ]:
-        _x = normalized_df[col][normalized_df[col] > 0].values
-        _, _bin_edges = np.histogram(_x, bins=30)
+    # approach 3 figures
+    approach_3_figures = []
 
-        _x_unsel = normalized_df[col][
+    # Create three separate figures, one for each stage
+    for _idx, (col, pass_col, title) in enumerate(
+        [
+            ("First Stage Score", "Selected First Stage", "Application + Resume"),
+            (
+                "Second Stage Score",
+                "Selected Second Stage",
+                "First interview + Work Test",
+            ),
+            ("Final Interview Score", "Hired", "Final Interview"),
+        ]
+    ):
+        _fig, _ax = plt.subplots(figsize=(8, 4))
+
+        # Get valid scores (> 0) for current stage
+        _scores = normalized_df[col][normalized_df[col] > 0].values
+        _, _bin_edges = np.histogram(_scores, bins=30)
+
+        # Separate selected and non-selected candidates
+        _scores_unselected = normalized_df[col][
             (normalized_df[col] > 0) & (~normalized_df[pass_col])
         ].values
-        _x_sel = normalized_df[col][normalized_df[pass_col]].values
-        _counts, _ = np.histogram(_x_unsel, bins=_bin_edges)
-        _counts_sel, _ = np.histogram(_x_sel, bins=_bin_edges)
+        _scores_selected = normalized_df[col][normalized_df[pass_col]].values
+        _counts_unselected, _ = np.histogram(_scores_unselected, bins=_bin_edges)
+        _counts_selected, _ = np.histogram(_scores_selected, bins=_bin_edges)
 
+        # Plot unselected candidates
         _ax.stairs(
-            _counts,
+            _counts_unselected,
             _bin_edges,
             fill=True,
             color=hist_color,
@@ -462,8 +513,10 @@ def _(
             linewidth=0.8,
             alpha=0.45,
         )
+
+        # Plot selected/hired candidates
         _ax.stairs(
-            _counts_sel,
+            _counts_selected,
             _bin_edges,
             fill=True,
             color=selected_color,
@@ -473,50 +526,41 @@ def _(
             label="Hired" if title == "Final Interview" else "Selected",
         )
 
-        _kde = stats.gaussian_kde(_x)
-        _x_grid = np.linspace(_x.min(), _x.max(), 200)
-        _scaled_kde = (
-            _kde(_x_grid) * len(_x) * np.diff(_bin_edges[:2])
-        )  # Scale KDE to match histogram
-        _ax.plot(_x_grid, _scaled_kde, color=kde_color, linewidth=2.2)
-        _ax.fill_between(_x_grid, _scaled_kde, color=kde_color, alpha=0.15)
+        # Overlay KDE curve scaled to match histogram frequency
+        _kde = stats.gaussian_kde(_scores)
+        _x_grid = np.linspace(_scores.min(), _scores.max(), 200)
+        _kde_scaled = _kde(_x_grid) * len(_scores) * np.diff(_bin_edges[:2])
+        _ax.plot(_x_grid, _kde_scaled, color=kde_color, linewidth=2.2)
+        _ax.fill_between(_x_grid, _kde_scaled, color=kde_color, alpha=0.15)
+
         _ax.set_xlabel("Score")
         _ax.set_ylabel("Frequency")
         _ax.set_title(title)
         _ax.grid(axis="y", alpha=0.25)
 
-    # Plot another histogram in red for the selected applicant's scores across stages
-
-
-    # Add vertical line for selected applicant's score in each subplot
-    selected_applicant_scores = n_app[
-        ["First Stage Score", "Second Stage Score", "Final Interview Score"]
-    ].values
-    for _ax, score in zip(_axes, selected_applicant_scores):
-        if score != 0:    
+        # Add vertical line for selected applicant's score
+        _applicant_score = n_app[col]
+        if _applicant_score != 0:
             _ax.axvline(
-                score,
+                _applicant_score,
                 color=marker_color,
                 linestyle="--",
                 linewidth=2,
                 label="Applicant",
             )
         _ax.legend(frameon=False, loc="upper right")
+        plt.tight_layout()
+        plt.show()
 
+        # Store html figure
+        # approach_3_figures.append(rf"""
+        # {mo.as_html(_fig)}
+        # """)
+        approach_3_figures.append(mo.as_html(_fig))
 
     plt.tight_layout()
     plt.show()
-
-    # approach_3_text = mo.md(rf"""
-    # {mo.as_html(_fig)}
-    # """)
-    return (selected_applicant_scores,)
-
-
-@app.cell
-def _(selected_applicant_scores):
-    selected_applicant_scores
-    return
+    return (approach_3_figures,)
 
 
 @app.cell
@@ -526,6 +570,9 @@ def _(
     approach_1_text,
     approach_2_header,
     approach_2_text,
+    approach_3_figures,
+    approach_3_header,
+    approach_3_text,
     first_stage,
     hiring_positions,
     mo,
@@ -533,8 +580,9 @@ def _(
     selected_applicant,
     sorted_df,
 ):
-    ## Make app
+    """Assemble the app UI with three tabs for different feedback approaches."""
 
+    # Parameters tab: simulation controls and candidate database
     tab1 = mo.vstack(
         [
             mo.md(r"""
@@ -558,6 +606,7 @@ def _(
         gap=2,
     )
 
+    # Approach 1 tab: simple ranking statistics
     tab2 = mo.vstack(
         [
             approach_1_header,
@@ -567,16 +616,35 @@ def _(
         gap=2,
     )
 
+    # Approach 2 tab: visual distribution with applicant marker
     tab3 = mo.vstack(
         [approach_2_header, selected_applicant, approach_1_text, approach_2_text],
         gap=2,
     )
 
+    # Approach 3 tab: descriptive statistics and three-panel distribution
+    tab4 = mo.vstack(
+        [
+            approach_3_header,
+            selected_applicant,
+            approach_1_text,
+            approach_3_text[0],
+            approach_3_figures[0],
+            approach_3_text[1],
+            approach_3_figures[1],
+            approach_3_text[2],
+            approach_3_figures[2],
+        ],
+        gap=2,
+    )
+
+    # Create tabbed interface
     tabs = mo.ui.tabs(
         {
             "Parameters": tab1,
             "Approach 1": tab2,
             "Approach 2": tab3,
+            "Approach 3": tab4,
         }
     )
     return (tabs,)
@@ -584,6 +652,8 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo, tabs):
+    """Display the main app interface."""
+
     mo.md(rf"""
     # Rethinking Application Feedback
 
