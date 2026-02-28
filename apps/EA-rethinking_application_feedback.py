@@ -142,7 +142,6 @@ def _(applications, first_stage, hiring_positions, np, pd, second_stage):
             "Selected Second Stage": passed_stage_2,
             "Final Interview Score": final_interview_scores,
             "Total Score": total_scores,
-            "Normalized Score": np.round(total_scores / np.max(total_scores), 4),
             "Hired": selected,
         }
     )
@@ -227,7 +226,7 @@ def _(applications, applications_df, mo, names, np, pd):
         start=1,
         stop=applications.value,
         step=1,
-        value=50,
+        value=52,
         include_input=True,
         label="Select an application number: ",
     )
@@ -533,7 +532,7 @@ def _(
         _ax.plot(_x_grid, _kde_scaled, color=kde_color, linewidth=2.2)
         _ax.fill_between(_x_grid, _kde_scaled, color=kde_color, alpha=0.15)
 
-        _ax.set_xlabel("Score")
+        _ax.set_xlabel("Normalized Score")
         _ax.set_ylabel("Frequency")
         _ax.set_title(title)
         _ax.grid(axis="y", alpha=0.25)
